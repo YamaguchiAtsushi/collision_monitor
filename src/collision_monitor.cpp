@@ -30,6 +30,8 @@ public:
         marker_pub_ = nh_.advertise<visualization_msgs::Marker>("collision_monitor", 1);
         collision_state_pub_ = nh_.advertise<std_msgs::Int16>("collision_state", 1000, this);
         sub_waypoint_state_pub_ = nh_.advertise<std_msgs::Int16>("sub_waypoint_state", 1000, this);
+
+        waypoint_sub_ = nh_.subscribe("waypoint", 1000, &CollisionMonitor::waypointCallback, this);
         scan_sub_ = nh_.subscribe("/scan", 10, &CollisionMonitor::scanCallback, this);
         odom_sub_ = nh_.subscribe("ypspur_ros/odom", 10, &CollisionMonitor::odomCallback, this);
         timer_callback_ = nh_.createTimer(ros::Duration(1.0), &CollisionMonitor::timerCallback, this);
@@ -56,7 +58,7 @@ public:
 
 private:
     ros::NodeHandle nh_;
-    ros::Subscriber scan_sub_, odom_sub_;
+    ros::Subscriber scan_sub_, odom_sub_, waypoint_sub_;
     ros::Publisher marker_pub_, robot_speed_pub_, collision_state_pub_, sub_waypoint_state_pub_;
     ros::Timer timer_callback_;
     ros::Time timer_start_;
@@ -64,6 +66,7 @@ private:
     std_msgs::Int16 collision_state_msg_;
     std_msgs::Int16 sub_waypoint_state_msg_;
     geometry_msgs::Point p_;
+    geometry_msgs::PoseStamped goal_;  // 目標地点goal_judge 
     geometry_msgs::Quaternion robot_r_;
     sensor_msgs::LaserScan::ConstPtr scan_;
 
@@ -83,6 +86,7 @@ private:
     void odomCallback(const nav_msgs::Odometry::ConstPtr &msg);
     void timerCallback(const ros::TimerEvent&);
     void visualize(double x_min, double x_max, double y_min, double y_max);
+    void waypointCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
 
 };
 
@@ -95,14 +99,16 @@ private:
     }
 
     void CollisionMonitor::detect_obstacle(){//calcAngleをつかって目的地との間にある障害物を検知するようにする！！！！！！！！！！！！！！！！！！！！！
-        std::cout << "detect_obstacle called" << std::endl;
         if (!scan_) {
             // scan_が初期化されていない場合は処理をスキップ
             ROS_WARN("Laser scan data is not yet received.");
             return;
         }
+        double waypoint_angle_rad = std::atan2(goal_.pose.position.y - robot_odom_y_ , goal_.pose.position.x - robot_odom_x_); // ラジアン
+        std::cout << "waypoint_angle_rad(度数法):" << waypoint_angle_rad * (180.0 / M_PI) << std::endl;
         for (size_t i = 0; i < scan_->ranges.size(); i++) {
             angle_rad_ = scan_->angle_min + i * scan_->angle_increment;
+            angle_rad_ = angle_rad_ - waypoint_angle_rad;//次のwaypointを加味できてる？？？
             angle_deg_ = angle_rad_ * (180.0 / M_PI); // ラジアンを度数法に変換
             distance_ = scan_->ranges[i];
             distance_judge_ = 100;
@@ -120,9 +126,9 @@ private:
             distance_judge_ = scan_->ranges[i] * std::cos(angle_rad_); // std::cosの入力はrad
             // std::cout << "distance_judge_:" << distance_judge_ << std::endl;
 
-            if (-10 < angle_deg_ && angle_deg_ < 10) {
+            if (-1 < angle_deg_ && angle_deg_ < 1) { //±10度に戻す
                 // distance_judge_ = scan->ranges[i] * std::cos(angle_rad); // std::cosの入力はrad
-                if ((-1.5 < distance_judge_ && distance_judge_ < -1.0) || (1.0 < distance_judge_ && distance_judge_ < 1.5)) {
+                if ((-1.5 < distance_judge_ && distance_judge_ < -0.5) || (0.5 < distance_judge_ && distance_judge_ < 1.5)) {
             // std::cout << "distance_judge_:" << distance_judge_ << std::endl;
 
                     // std::cout << "1_0.5~1.5" << std::endl;
@@ -130,7 +136,7 @@ private:
                     sub_waypoint_state_msg_.data = 0;
 
 
-                }else if(-1.0 <= distance_judge_ && distance_judge_ <= 1.0){
+                }else if(-0.5 <= distance_judge_ && distance_judge_ <= 0.5){
             // std::cout << "distance_judge_:" << distance_judge_ << std::endl;
 
                     // std::cout << " 1_~0.5" <<  std::endl;
@@ -249,6 +255,15 @@ private:
         robot_odom_x_ = msg->pose.pose.position.x;
         robot_odom_y_ = msg->pose.pose.position.y;
         // std::cout << "robot_odom_x_:" << robot_odom_x_ << "robot_odom_y_;" << robot_odom_y_ << std::endl;
+    }
+
+    void CollisionMonitor::waypointCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
+        ROS_INFO("Received waypoint: [x: %f, y: %f]", msg->pose.position.x, msg->pose.position.y);
+
+        // サブスクライブしたウェイポイントを処理
+        // 例えば次の目標に設定する
+        goal_ = *msg;
+        std::cout << "goal_" << goal_ << std::endl;
     }
 
 int main(int argc, char **argv) {
