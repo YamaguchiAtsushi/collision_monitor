@@ -104,11 +104,13 @@ private:
             ROS_WARN("Laser scan data is not yet received.");
             return;
         }
-        double waypoint_angle_rad = std::atan2(goal_.pose.position.y - robot_odom_y_ , goal_.pose.position.x - robot_odom_x_); // ラジアン
+        // double waypoint_angle_rad = std::atan2(goal_.pose.position.y - robot_odom_y_ , goal_.pose.position.x - robot_odom_x_); // ラジアン
+        double waypoint_angle_rad = std::atan2(goal_.pose.position.y - robot_y_ , goal_.pose.position.x - robot_x_); // ラジアン
+
         std::cout << "waypoint_angle_rad(度数法):" << waypoint_angle_rad * (180.0 / M_PI) << std::endl;
         for (size_t i = 0; i < scan_->ranges.size(); i++) {
             angle_rad_ = scan_->angle_min + i * scan_->angle_increment;
-            angle_rad_ = angle_rad_ - waypoint_angle_rad;//次のwaypointを加味できてる？？？
+            angle_rad_ = angle_rad_ - 2 * waypoint_angle_rad;//次のwaypointを加味できてる？？？
             angle_deg_ = angle_rad_ * (180.0 / M_PI); // ラジアンを度数法に変換
             distance_ = scan_->ranges[i];
             distance_judge_ = 100;
@@ -126,9 +128,9 @@ private:
             distance_judge_ = scan_->ranges[i] * std::cos(angle_rad_); // std::cosの入力はrad
             // std::cout << "distance_judge_:" << distance_judge_ << std::endl;
 
-            if (-1 < angle_deg_ && angle_deg_ < 1) { //±10度に戻す
+            if (-2.0 < angle_deg_ && angle_deg_ < 2.0) { //±10度に戻す
                 // distance_judge_ = scan->ranges[i] * std::cos(angle_rad); // std::cosの入力はrad
-                if ((-1.5 < distance_judge_ && distance_judge_ < -0.5) || (0.5 < distance_judge_ && distance_judge_ < 1.5)) {
+                if ((-1.5 < distance_judge_ && distance_judge_ < -.0) || (1.0 < distance_judge_ && distance_judge_ < 1.5)) {
             // std::cout << "distance_judge_:" << distance_judge_ << std::endl;
 
                     // std::cout << "1_0.5~1.5" << std::endl;
@@ -136,7 +138,7 @@ private:
                     sub_waypoint_state_msg_.data = 0;
 
 
-                }else if(-0.5 <= distance_judge_ && distance_judge_ <= 0.5){
+                }else if(-1.0 <= distance_judge_ && distance_judge_ <= 1.0){
             // std::cout << "distance_judge_:" << distance_judge_ << std::endl;
 
                     // std::cout << " 1_~0.5" <<  std::endl;
@@ -153,7 +155,9 @@ private:
 
                 }
 
-            visualize(robot_odom_x_ + x_min, robot_odom_x_ + x_max, robot_odom_y_ + y_min, robot_odom_y_ + y_max);
+            // visualize(robot_odom_x_ + x_min, robot_odom_x_ + x_max, robot_odom_y_ + y_min, robot_odom_y_ + y_max);
+            visualize(robot_x_ + x_min, robot_x_ + x_max, robot_y_ + y_min, robot_y_ + y_max);
+
             
             }
             
@@ -223,7 +227,9 @@ private:
     }
 
     double CollisionMonitor::calcAngle(geometry_msgs::PoseStamped goal){
-        theta_ = atan2(goal.pose.position.y - robot_odom_y_, goal.pose.position.x - robot_odom_x_);
+        // theta_ = atan2(goal.pose.position.y - robot_odom_y_, goal.pose.position.x - robot_odom_x_);
+        theta_ = atan2(goal.pose.position.y - robot_y_, goal.pose.position.x - robot_x_);
+
         while (theta_ <= -M_PI || M_PI <= theta_)
         {
             if (theta_ <= -M_PI)
@@ -263,7 +269,7 @@ private:
         // サブスクライブしたウェイポイントを処理
         // 例えば次の目標に設定する
         goal_ = *msg;
-        std::cout << "goal_" << goal_ << std::endl;
+        // std::cout << "goal_" << goal_ << std::endl;
     }
 
 int main(int argc, char **argv) {
