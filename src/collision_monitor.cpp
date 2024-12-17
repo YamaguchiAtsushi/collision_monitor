@@ -22,7 +22,6 @@
 
 // ros::Publisher marker_pub; // パブリッシャーをグローバルで宣言
 
-//---------------------------自己位置がodomになってる--------------------------------
 class CollisionMonitor
 {
 public:
